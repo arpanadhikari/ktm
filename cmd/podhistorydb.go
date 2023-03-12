@@ -4,6 +4,8 @@ package cmd
 // a simple interface for storing and retrieving pod history data.
 
 import (
+	"encoding/json"
+	"fmt"
 	"time"
 
 	bolt "go.etcd.io/bbolt"
@@ -16,12 +18,16 @@ type PodHistoryDB struct {
 
 // OpenPodHistoryDB opens the podhistorydb database.
 func OpenPodHistoryDB() (*PodHistoryDB, error) {
-	db, err := bolt.Open("podhistorydb", 0600, nil)
-
+	db, err := bolt.Open("ktm_podhistorydb.db", 0600, nil)
 	if err != nil {
-		return nil, err
+
+		return nil, fmt.Errorf("failed to initialize database: %w", err)
 	}
-	return NewPodHistoryDB(db), nil
+
+	// return an instance of PodHistoryDB
+	return &PodHistoryDB{
+		db: db,
+	}, nil
 }
 
 // CheckPodHistoryDB checks if the podhistorydb database exists.
@@ -49,8 +55,8 @@ type PodHistory struct {
 	NodeName     string
 	PodUID       string
 	StartTime    time.Time
-	EndTime      time.Time
-	Resources    struct {
+	// EndTime      time.Time
+	Resources struct {
 		CPU    string
 		Memory string
 	}
@@ -60,7 +66,7 @@ type PodHistory struct {
 type NodeHistory struct {
 	NodeName  string
 	StartTime time.Time
-	EndTime   time.Time
+	// EndTime   time.Time
 	Resources struct {
 		CPU    string
 		Memory string
@@ -70,26 +76,35 @@ type NodeHistory struct {
 // AddPodHistory adds a pod history to the database.
 func (phdb *PodHistoryDB) AddPodHistory(ph PodHistory) error {
 	return phdb.db.Update(func(tx *bolt.Tx) error {
-		b, err := tx.CreateBucketIfNotExists([]byte(ph.PodNamespace))
+		b, err := tx.CreateBucketIfNotExists([]byte("pods"))
 		if err != nil {
 			return err
 		}
-		return b.Put([]byte(ph.PodName), []byte(ph.PodUID))
+		// searialize the pod history
+		serialized, _ := json.Marshal(ph)
+
+		return b.Put([]byte(ph.PodName), []byte(serialized))
 	})
+
 }
 
 // GetPodHistory returns the pod history for a given pod.
-func (phdb *PodHistoryDB) GetPodHistory(podName, podNamespace string) (PodHistory, error) {
+func (phdb *PodHistoryDB) GetPodHistory(podName string) (PodHistory, error) {
 	var ph PodHistory
+
+	// retrieve the pod history struct from the database
 	err := phdb.db.View(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(podNamespace))
+		b := tx.Bucket([]byte("pods"))
 		if b == nil {
 			return nil
 		}
-		ph.PodUID = string(b.Get([]byte(podName)))
+		//desearlize the pod history
+		serialized := b.Get([]byte(podName))
+		json.Unmarshal(serialized, &ph)
 		return nil
 	})
 	return ph, err
+
 }
 
 // AddNodeHistory add a nodes history to the database.
@@ -99,7 +114,11 @@ func (phdb *PodHistoryDB) AddNodeHistory(nh NodeHistory) error {
 		if err != nil {
 			return err
 		}
-		return b.Put([]byte(nh.NodeName), []byte(nh.NodeName))
+		serialized, err := json.Marshal(nh)
+		if err != nil {
+			return err
+		}
+		return b.Put([]byte(nh.NodeName), serialized)
 	})
 }
 
@@ -111,7 +130,9 @@ func (phdb *PodHistoryDB) GetNodeHistory(nodeName string) (NodeHistory, error) {
 		if b == nil {
 			return nil
 		}
-		nh.NodeName = string(b.Get([]byte(nodeName)))
+		// desearlize the node history
+		serialized := b.Get([]byte(nodeName))
+		json.Unmarshal(serialized, &nh)
 		return nil
 	})
 	return nh, err
