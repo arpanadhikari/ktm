@@ -75,40 +75,11 @@ func podWatch(clientset kubernetes.Interface, db *PodHistoryDB) error {
 
 	for _, node := range nodes.Items {
 		// add node history to database
-		if err := db.AddNodeHistory(NodeHistory{
-			NodeName:  node.Name,
-			StartTime: node.CreationTimestamp.Time,
-			Resources: struct {
-				CPU    string
-				Memory string
-			}{
-				CPU:    node.Status.Allocatable.Cpu().String(),
-				Memory: node.Status.Allocatable.Memory().String(),
-			},
-		}); err != nil {
-			return fmt.Errorf("failed to write node history to database: %w", err)
-		}
-
+		onAdd(&node, db)
 	}
 	for _, pod := range pods.Items {
 		// add pod history to database
-		if err := db.AddPodHistory(PodHistory{
-			PodName:      pod.Name,
-			PodNamespace: pod.Namespace,
-			NodeName:     pod.Spec.NodeName,
-			StartTime:    pod.CreationTimestamp.Time,
-			PodUID:       string(pod.UID),
-			Resources: struct {
-				CPU    string
-				Memory string
-			}{
-				CPU:    pod.Spec.Containers[0].Resources.Requests.Cpu().String(),
-				Memory: pod.Spec.Containers[0].Resources.Requests.Memory().String(),
-			},
-		}); err != nil {
-			return fmt.Errorf("failed to write pod history to database: %w", err)
-		}
-
+		onAdd(&pod, db)
 	}
 
 	return nil
