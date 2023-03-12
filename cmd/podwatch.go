@@ -124,7 +124,7 @@ func watchEvents(clientset kubernetes.Interface, db *PodHistoryDB, stop chan str
 	fmt.Println("Starting controllers...")
 	start := time.Now()
 
-	// run the controllers
+	// run controllers until stop channel is closed
 	go controller_pod.Run(stop)
 	go controller_node.Run(stop)
 
@@ -139,7 +139,6 @@ func watchEvents(clientset kubernetes.Interface, db *PodHistoryDB, stop chan str
 }
 
 func onAdd(obj interface{}, db *PodHistoryDB) {
-	fmt.Println("OnAdd called")
 	if pod, ok := obj.(*v1.Pod); ok {
 		fmt.Printf("New Pod Added to Store: %s\n", pod.GetName())
 		pod := obj.(*v1.Pod)
@@ -181,7 +180,6 @@ func onAdd(obj interface{}, db *PodHistoryDB) {
 }
 
 func onDelete(obj interface{}, db *PodHistoryDB) {
-	fmt.Println("OnDelete called")
 	if pod, ok := obj.(*v1.Pod); ok {
 		fmt.Printf("Pod Deleted from Store: %s\n", pod.GetName())
 	}
