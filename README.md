@@ -2,20 +2,13 @@
 
 Welcome to KTM, this project aims to allow Devs and AI models replay an entire kubernetes cluster.
 
-## This enables few possibilities:
-- Machine learning models can be fed the same data over and over again for training.
-- Devs/Engineers can replay an incident and interact with the cluster (from the past) in real-time to debug issues.
-- and some cool unthought-of implementations.
-
-## Lots of technicall challenges exist to achieve this.
-
-Some that I can think of:
-- How do we 'fool' an etcd cluster that it's interacting with real apiserver? (in order to feed past data, rather than realtime data)
-- How do we collect data detailed enough to reproduce every single api request and interaction that happened in the cluster?
+See [vision.md](./vision.md) for more details.
 
 
-## Architecture
+# Features
 
-High level architecture that makes sense at the moment:
+- ## Kubernetes PodWatch
 
-![Architecture](architecture-high-level.drawio.svg "High Level Architecture")
+To watch for pods just run `ktm podwatch` and it will watch for pods and print them to stdout.
+
+In addition to printing to stdout, it also stores the pod manifest in a local bbolt database.
