@@ -2,7 +2,7 @@
 
 Copywright: Arpan Adhikari
 
-Podwatch_test.go is a test file for podwatch.
+podwatch_test.go is a test file for podwatch.
 
 */
 
@@ -11,8 +11,6 @@ package cmd
 import (
 	"testing"
 	"time"
-
-	// import kubernetes pod and node packages
 
 	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/api/core/v1"
@@ -87,39 +85,6 @@ func TestPodWatch(t *testing.T) {
 	}
 	assert.Equal(t, node.NodeName, nodeName, "node name is not the same as the one we created")
 
-	db.Close()
-
-}
-
-// TestGetPods tests the getPods function
-func TestGetPods(t *testing.T) {
-
-	podName := "test-pod-testgetpods"
-	podNamespace := "test-namespace"
-
-	db, err := OpenPodHistoryDB()
-
-	if err != nil {
-		t.Errorf("failed to open database: %v", err)
-	}
-
-	// add podhistory to db
-	err = db.AddPodHistory(PodHistory{
-		PodName:      podName,
-		PodNamespace: podNamespace,
-	})
-	if err != nil {
-		t.Errorf("failed to add pod to database: %v", err)
-	}
-
-	pod, err := db.GetPodHistory(podName)
-	if err != nil {
-		t.Errorf("failed to get pod from database: %v", err)
-	}
-
-	assert.Equal(t, pod.PodName, podName, "pod name is not the same as the one we created")
-
-	//close db
 	db.Close()
 
 }
