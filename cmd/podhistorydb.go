@@ -6,7 +6,8 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
-	"time"
+
+	v1 "k8s.io/api/core/v1"
 
 	bolt "go.etcd.io/bbolt"
 )
@@ -50,27 +51,12 @@ func NewPodHistoryDB(db *bolt.DB) *PodHistoryDB {
 
 // PodHistory is a struct that contains the history of a pod.
 type PodHistory struct {
-	PodName      string
-	PodNamespace string
-	NodeName     string
-	PodUID       string
-	StartTime    time.Time
-	// EndTime      time.Time
-	Resources struct {
-		CPU    string
-		Memory string
-	}
+	Pod v1.Pod
 }
 
 // NodeHistory is a struct that contains the history of a node.
 type NodeHistory struct {
-	NodeName  string
-	StartTime time.Time
-	// EndTime   time.Time
-	Resources struct {
-		CPU    string
-		Memory string
-	}
+	Node v1.Node
 }
 
 // AddPodHistory adds a pod history to the database.
@@ -83,7 +69,7 @@ func (phdb *PodHistoryDB) AddPodHistory(ph PodHistory) error {
 		// searialize the pod history
 		serialized, _ := json.Marshal(ph)
 
-		return b.Put([]byte(ph.PodName), []byte(serialized))
+		return b.Put([]byte(ph.Pod.ObjectMeta.Name), []byte(serialized))
 	})
 
 }
@@ -118,7 +104,7 @@ func (phdb *PodHistoryDB) AddNodeHistory(nh NodeHistory) error {
 		if err != nil {
 			return err
 		}
-		return b.Put([]byte(nh.NodeName), serialized)
+		return b.Put([]byte(nh.Node.ObjectMeta.Name), serialized)
 	})
 }
 

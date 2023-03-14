@@ -14,7 +14,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
 )
@@ -35,30 +34,11 @@ func TestPodWatch(t *testing.T) {
 				CreationTimestamp: metav1.Time{Time: time.Now()},
 				UID:               "test-uid",
 			},
-			Spec: v1.PodSpec{
-				NodeName: nodeName,
-				Containers: []v1.Container{
-					{
-						Resources: v1.ResourceRequirements{
-							Requests: v1.ResourceList{
-								v1.ResourceCPU:    *resource.NewMilliQuantity(100, resource.DecimalSI),
-								v1.ResourceMemory: *resource.NewQuantity(100*1024*1024, resource.BinarySI),
-							},
-						},
-					},
-				},
-			},
 		},
 		&v1.Node{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:              "test-node",
 				CreationTimestamp: metav1.Time{Time: time.Now()},
-			},
-			Status: v1.NodeStatus{
-				Allocatable: v1.ResourceList{
-					v1.ResourceCPU:    *resource.NewMilliQuantity(1000, resource.DecimalSI),
-					v1.ResourceMemory: *resource.NewQuantity(1*1024*1024*1024, resource.BinarySI),
-				},
 			},
 		},
 	)
@@ -73,18 +53,20 @@ func TestPodWatch(t *testing.T) {
 		t.Errorf("failed to execute podwatch: %v", err)
 	}
 
-	pod, err := db.GetPodHistory(podName)
+	podHistory, err := db.GetPodHistory(podName)
 	if err != nil {
 		t.Errorf("failed to get pod from database: %v", err)
 	}
-	assert.Equal(t, pod.PodName, podName, "pod name is not the same as the one we created")
+	assert.Equal(t, podHistory.Pod.ObjectMeta.Name, podName, "pod name is not the same as the one we created")
 
-	node, err := db.GetNodeHistory(nodeName)
+	nodeHistory, err := db.GetNodeHistory(nodeName)
 	if err != nil {
 		t.Errorf("failed to get node from database: %v", err)
 	}
-	assert.Equal(t, node.NodeName, nodeName, "node name is not the same as the one we created")
+	assert.Equal(t, nodeHistory.Node.ObjectMeta.Name, nodeName, "node name is not the same as the one we created")
 
 	db.Close()
 
 }
+
+// TODO: Add test for podwatch function.

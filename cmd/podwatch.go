@@ -120,17 +120,14 @@ func watchEvents(clientset kubernetes.Interface, db *PodHistoryDB, stop chan str
 			},
 		},
 	)
-	// print controller status
 	fmt.Println("Starting controllers...")
 	start := time.Now()
 
-	// run controllers until stop channel is closed
 	go controller_pod.Run(stop)
 	go controller_node.Run(stop)
 
 	fmt.Println("Controllers started...")
 
-	// fmt.Println("Stopping controllers...")
 	end := time.Now()
 	fmt.Printf("Controllers stopped after %v", end.Sub(start))
 
@@ -144,18 +141,7 @@ func onAdd(obj interface{}, db *PodHistoryDB) {
 		pod := obj.(*v1.Pod)
 		// write podhistory to database
 		if err := db.AddPodHistory(PodHistory{
-			PodName:      pod.Name,
-			PodNamespace: pod.Namespace,
-			NodeName:     pod.Spec.NodeName,
-			StartTime:    pod.CreationTimestamp.Time,
-			// EndTime:      pod.DeletionTimestamp.Time,
-			Resources: struct {
-				CPU    string
-				Memory string
-			}{
-				CPU:    pod.Spec.Containers[0].Resources.Requests.Cpu().String(),
-				Memory: pod.Spec.Containers[0].Resources.Requests.Memory().String(),
-			},
+			Pod: *pod,
 		}); err != nil {
 			fmt.Errorf("failed to write pod history to database: %w", err)
 		}
@@ -163,16 +149,7 @@ func onAdd(obj interface{}, db *PodHistoryDB) {
 	if node, ok := obj.(*v1.Node); ok {
 		fmt.Printf("New Node Added to Store: %s\n", node.GetName())
 		if err := db.AddNodeHistory(NodeHistory{
-			NodeName:  node.Name,
-			StartTime: node.CreationTimestamp.Time,
-			// EndTime:   node.DeletionTimestamp.Time,
-			Resources: struct {
-				CPU    string
-				Memory string
-			}{
-				CPU:    node.Status.Allocatable.Cpu().String(),
-				Memory: node.Status.Allocatable.Memory().String(),
-			},
+			Node: *node,
 		}); err != nil {
 			fmt.Errorf("failed to write node history to database: %w", err)
 		}
