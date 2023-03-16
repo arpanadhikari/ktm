@@ -91,9 +91,6 @@ func podWatch(clientset kubernetes.Interface, db *PodHistoryDB) error {
 // watchEvents watches for pod and node events and writes them to the database
 func watchEvents(clientset kubernetes.Interface, db *PodHistoryDB, stop chan struct{}) error {
 
-	fmt.Println("watchEvents: starting...")
-	defer fmt.Println("watchEvents: done")
-
 	informerFactory := informers.NewSharedInformerFactory(clientset, time.Second*0)
 
 	podInformer := informerFactory.Core().V1().Pods().Informer()
@@ -140,14 +137,10 @@ func watchEvents(clientset kubernetes.Interface, db *PodHistoryDB, stop chan str
 	go func() {
 		defer wg.Done()
 		podInformer.Run(stop)
-		fmt.Println("watchEvents: pod stop signal received")
-		fmt.Println(stop)
 	}()
 	go func() {
 		defer wg.Done()
 		nodeInformer.Run(stop)
-		fmt.Println("watchEvents: node stop signal received")
-		fmt.Println(stop)
 	}()
 	wg.Wait()
 
@@ -157,7 +150,6 @@ func watchEvents(clientset kubernetes.Interface, db *PodHistoryDB, stop chan str
 	end := time.Now()
 	fmt.Printf("Controllers stopped after %v", end.Sub(start))
 
-	fmt.Println("watchEvents: exiting...")
 	return nil
 
 }
