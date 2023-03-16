@@ -70,7 +70,6 @@ func TestPodWatch(t *testing.T) {
 
 }
 
-// TODO: Add test for podwatch function.
 func TestWatchEvents(t *testing.T) {
 	db, _ := OpenPodHistoryDB()
 	clientset := fake.NewSimpleClientset()
