@@ -8,11 +8,12 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"sync"
 	"time"
 
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/fields"
+	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/clientcmd"
@@ -90,43 +91,61 @@ func podWatch(clientset kubernetes.Interface, db *PodHistoryDB) error {
 // watchEvents watches for pod and node events and writes them to the database
 func watchEvents(clientset kubernetes.Interface, db *PodHistoryDB, stop chan struct{}) error {
 
-	// watch for new pod events
-	podWatchlist := cache.NewListWatchFromClient(clientset.CoreV1().RESTClient(), "pods", v1.NamespaceAll, fields.Everything())
-	_, controller_pod := cache.NewInformer(
-		podWatchlist,
-		&v1.Pod{},
-		time.Second*0,
-		cache.ResourceEventHandlerFuncs{
-			AddFunc: func(obj interface{}) {
-				onAdd(obj, db)
-			},
-			DeleteFunc: func(obj interface{}) {
-				onDelete(obj, db)
-			},
+	informerFactory := informers.NewSharedInformerFactory(clientset, time.Second*0)
+
+	podInformer := informerFactory.Core().V1().Pods().Informer()
+	nodeInformer := informerFactory.Core().V1().Nodes().Informer()
+
+	podInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc: func(obj interface{}) {
+			onAdd(obj, db)
 		},
-	)
-	// watch for node events
-	nodeWatchlist := cache.NewListWatchFromClient(clientset.CoreV1().RESTClient(), "nodes", v1.NamespaceAll, fields.Everything())
-	_, controller_node := cache.NewInformer(
-		nodeWatchlist,
-		&v1.Node{},
-		time.Second*0,
-		cache.ResourceEventHandlerFuncs{
-			AddFunc: func(obj interface{}) {
-				onAdd(obj, db)
-			},
-			DeleteFunc: func(obj interface{}) {
-				onDelete(obj, db)
-			},
+		DeleteFunc: func(obj interface{}) {
+			onDelete(obj, db)
 		},
-	)
+		UpdateFunc: func(oldObj, newObj interface{}) {
+			onUpdate(oldObj, newObj, db)
+		},
+	})
+
+	nodeInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc: func(obj interface{}) {
+			onAdd(obj, db)
+		},
+		DeleteFunc: func(obj interface{}) {
+			onDelete(obj, db)
+		},
+		UpdateFunc: func(oldObj, newObj interface{}) {
+			onUpdate(oldObj, newObj, db)
+		},
+	})
+
+	// check if informers are valid
+	if nodeInformer == nil {
+		return fmt.Errorf("failed to create node controller")
+	}
+	if podInformer == nil {
+		return fmt.Errorf("failed to create pod controller")
+	}
+
 	fmt.Println("Starting controllers...")
 	start := time.Now()
+	fmt.Println("watchEvents: waiting for stop signal...")
 
-	go controller_pod.Run(stop)
-	go controller_node.Run(stop)
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		podInformer.Run(stop)
+	}()
+	go func() {
+		defer wg.Done()
+		nodeInformer.Run(stop)
+	}()
+	wg.Wait()
 
-	fmt.Println("Controllers started...")
+	// wait for stop signal or informers to finish
+	<-stop
 
 	end := time.Now()
 	fmt.Printf("Controllers stopped after %v", end.Sub(start))
@@ -162,5 +181,22 @@ func onDelete(obj interface{}, db *PodHistoryDB) {
 	}
 	if node, ok := obj.(*v1.Node); ok {
 		fmt.Printf("Node Deleted from Store: %s\n", node.GetName())
+	}
+}
+
+func onUpdate(oldObj, newObj interface{}, db *PodHistoryDB) {
+	if pod, ok := newObj.(*v1.Pod); ok {
+		fmt.Printf("Pod Updated in Store: %s\n", pod.GetName())
+	}
+	if node, ok := newObj.(*v1.Node); ok {
+		fmt.Printf("Node Updated in Store: %s\n", node.GetName())
+	}
+
+	// print the old object name
+	if oldObj, ok := oldObj.(*v1.Node); ok {
+		fmt.Printf("oldObj: %s", oldObj.GetName())
+	}
+	if oldObj, ok := oldObj.(*v1.Pod); ok {
+		fmt.Printf("oldObj: %s", oldObj.GetName())
 	}
 }
