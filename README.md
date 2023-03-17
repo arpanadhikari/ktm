@@ -7,8 +7,8 @@ See [vision.md](./vision.md) for more details.
 
 # Features
 
-- ## Kubernetes PodWatch
+- ## Kubernetes watch
 
-To watch for pods just run `ktm podwatch` and it will watch for pods and print them to stdout.
+To watch for pods just run `ktm watch` and it will watch for pods and nodes and print them to stdout.
 
-In addition to printing to stdout, it also stores the pod manifest in a local bbolt database.
+In addition to printing to stdout, it also stores the the pod and node manifests in a local bbolt database.
