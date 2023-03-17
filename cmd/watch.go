@@ -88,7 +88,6 @@ func initWatch(clientset kubernetes.Interface, db *PodHistoryDB) error {
 
 }
 
-// TODO: refactor the function to enable unit testing
 // watchEvents watches for pod and node events and writes them to the database
 func watchEvents(clientset kubernetes.Interface, db *PodHistoryDB, stop chan struct{}) error {
 
