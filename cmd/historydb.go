@@ -4,8 +4,8 @@ package cmd
 // a simple interface for storing and retrieving pod history data.
 
 import (
+	"bytes"
 	"encoding/json"
-	"fmt"
 
 	v1 "k8s.io/api/core/v1"
 
@@ -18,17 +18,17 @@ type PodHistoryDB struct {
 }
 
 // OpenPodHistoryDB opens the podhistorydb database.
-func OpenPodHistoryDB() (*PodHistoryDB, error) {
+func OpenPodHistoryDB(inMemory ...*bool) (*PodHistoryDB, error) {
+	var db *bolt.DB
 	db, err := bolt.Open("ktm_podhistorydb.db", 0600, nil)
 	if err != nil {
-
-		return nil, fmt.Errorf("failed to initialize database: %w", err)
+		return nil, err
 	}
 
-	// return an instance of PodHistoryDB
 	return &PodHistoryDB{
 		db: db,
 	}, nil
+
 }
 
 // CheckPodHistoryDB checks if the podhistorydb database exists.
@@ -51,12 +51,14 @@ func NewPodHistoryDB(db *bolt.DB) *PodHistoryDB {
 
 // PodHistory is a struct that contains the history of a pod.
 type PodHistory struct {
-	Pod v1.Pod
+	Pod   v1.Pod
+	Event v1.Event
 }
 
 // NodeHistory is a struct that contains the history of a node.
 type NodeHistory struct {
-	Node v1.Node
+	Node  v1.Node
+	Event v1.Event
 }
 
 // AddPodHistory adds a pod history to the database.
@@ -68,27 +70,34 @@ func (phdb *PodHistoryDB) AddPodHistory(ph PodHistory) error {
 		}
 		// searialize the pod history
 		serialized, _ := json.Marshal(ph)
-
-		return b.Put([]byte(ph.Pod.ObjectMeta.Name), []byte(serialized))
+		// use podname+event timestamp as the key, use creation timestamp if event timestamp is not available
+		if ph.Event.CreationTimestamp.IsZero() {
+			return b.Put([]byte(ph.Pod.ObjectMeta.Name+ph.Pod.ObjectMeta.CreationTimestamp.String()), serialized)
+		}
+		return b.Put([]byte(ph.Pod.ObjectMeta.Name+ph.Event.CreationTimestamp.String()), serialized)
 	})
 
 }
 
 // GetPodHistory returns the pod history for a given pod.
-func (phdb *PodHistoryDB) GetPodHistory(podName string) (PodHistory, error) {
-	var ph PodHistory
+func (phdb *PodHistoryDB) GetPodHistory(podName string) ([]PodHistory, error) {
+	var ph []PodHistory
 
-	// retrieve the pod history struct from the database
+	// retrieve all the pod history that starts with the pod name
 	err := phdb.db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte("pods"))
 		if b == nil {
 			return nil
 		}
-		//desearlize the pod history
-		serialized := b.Get([]byte(podName))
-		json.Unmarshal(serialized, &ph)
+		c := b.Cursor()
+		for k, v := c.Seek([]byte(podName)); k != nil && bytes.HasPrefix(k, []byte(podName)); k, v = c.Next() {
+			var p PodHistory
+			json.Unmarshal(v, &p)
+			ph = append(ph, p)
+		}
 		return nil
 	})
+
 	return ph, err
 
 }
