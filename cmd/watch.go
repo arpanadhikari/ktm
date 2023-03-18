@@ -177,31 +177,64 @@ func onAdd(obj interface{}, db *PodHistoryDB) {
 
 func onDelete(obj interface{}, db *PodHistoryDB) {
 	if pod, ok := obj.(*v1.Pod); ok {
-		fmt.Printf("Pod Deleted from Store: %s\n", pod.GetName())
+		// write podhistory to database
+		if err := db.AddPodHistory(PodHistory{
+			Pod: *pod,
+			Event: v1.Event{
+				Type: "Deleted",
+				FirstTimestamp: metav1.Time{
+					Time: time.Now(),
+				},
+			},
+		}); err != nil {
+			fmt.Errorf("failed to write pod history to database: %w", err)
+		}
 	}
 	if node, ok := obj.(*v1.Node); ok {
-		fmt.Printf("Node Deleted from Store: %s\n", node.GetName())
+		if err := db.AddNodeHistory(NodeHistory{
+			Node: *node,
+			Event: v1.Event{
+				Type: "Deleted",
+				FirstTimestamp: metav1.Time{
+					Time: time.Now(),
+				},
+			},
+		}); err != nil {
+			fmt.Errorf("failed to write node history to database: %w", err)
+		}
 	}
 }
 
 func onUpdate(oldObj, newObj interface{}, db *PodHistoryDB) {
+
+	fmt.Printf("Diff: %v", cmp.Diff(oldObj, newObj))
 	if pod, ok := newObj.(*v1.Pod); ok {
 		fmt.Printf("Pod Updated in Store: %s\n", pod.GetName())
+		// write podhistory to database
+		if err := db.AddPodHistory(PodHistory{
+			Pod: *pod,
+			Event: v1.Event{
+				Type: "Updated",
+				FirstTimestamp: metav1.Time{
+					Time: time.Now(),
+				},
+			},
+		}); err != nil {
+			fmt.Errorf("failed to write pod history to database: %w", err)
+		}
 	}
 	if node, ok := newObj.(*v1.Node); ok {
 		fmt.Printf("Node Updated in Store: %s\n", node.GetName())
-	}
-
-	// print the old object name
-	if oldObj, ok := oldObj.(*v1.Node); ok {
-		fmt.Printf("oldObj: %s", oldObj.GetName())
-		// print a diff between the old and new object
-		fmt.Printf("Diff: %v", cmp.Diff(oldObj, newObj))
-	}
-	if oldObj, ok := oldObj.(*v1.Pod); ok {
-		fmt.Printf("oldObj: %s", oldObj.GetName())
-		// print a diff between the old and new object
-		fmt.Printf("Diff: %v", cmp.Diff(oldObj, newObj))
-
+		if err := db.AddNodeHistory(NodeHistory{
+			Node: *node,
+			Event: v1.Event{
+				Type: "Updated",
+				FirstTimestamp: metav1.Time{
+					Time: time.Now(),
+				},
+			},
+		}); err != nil {
+			fmt.Errorf("failed to write node history to database: %w", err)
+		}
 	}
 }
