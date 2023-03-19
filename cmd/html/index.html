@@ -1,1 +1,142 @@
-Hello world, I'm KTM
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Node Visualization</title>
+  <style>
+    #visualization {
+      width: 100%;
+      height: 500px;
+    }
+
+    .node {
+      width: 150px;
+      height: 100px;
+      background-color: #ccc;
+      border-radius: 10px;
+      padding: 10px;
+      box-sizing: border-box;
+    }
+  </style>
+</head>
+<body>
+  <div id="visualization"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+
+  <script>
+
+document.addEventListener("DOMContentLoaded", () => {
+
+    // create nodes on svg based on getNodes() function
+    const nodeData = getNodes();
+
+    // create svg
+    const svg = d3.select("#visualization")
+        .append("svg")
+        .attr("width", window.innerWidth)
+        .attr("height", window.innerHeight);
+
+    // create a simple root node
+    const root = d3.hierarchy(nodeData);
+    console.log(root.leaves())
+
+    // create a treemap with nodeData
+    const treemap = d3.treemap()
+        .size([window.innerWidth, window.innerHeight])
+        .padding(1)
+        .tile(customTile)(root);
+
+    console.log(treemap.leaves())    
+
+    // add rectangles for each node
+    svg.selectAll("rect")
+    .data(treemap.leaves())
+    .enter()
+    .append("rect")
+    .attr("x", (d) => {
+        console.log(d.x0, d.x1);
+        return d.x0;
+    })
+    .attr("y", (d) => {
+        console.log(d.y0, d.y1);
+        return d.y0;
+    })
+    .attr("width", (d) => d.x1 - d.x0)
+    .attr("height", (d) => d.y1 - d.y0)
+    .style("fill", "steelblue")
+    .style("stroke", "white");
+
+});
+
+function customTile(node, x0, y0, x1, y1) {
+    console.log('Processing node:', node);
+
+  if (node.children) {
+    // This is not a leaf node, return default tiling
+    console.log("Root node, using default tiling");
+    return d3.treemapSquarify(node, x0, y0, x1, y1);
+  }
+
+  const ratio = node.data.size.memory*20 / node.data.size.cpu*20; // prioritize memory over CPU
+  const width = x1 - x0;
+  const height = y1 - y0;
+
+  if (width > height / ratio) {
+    const dx = (width - height / ratio) / 2;
+    return [x0 + dx, y0, x1 - dx, y1];
+  } else {
+    const dy = (height - width * ratio) / 2;
+    return [x0, y0 + dy, x1, y1 - dy];
+  }
+}
+
+
+// function to fetch number of nodes
+function getNodes() {
+    return {
+        name: "nodes",
+        children: [
+            {
+            name: "node1",
+            nodesize: {
+                cpu: 4,
+                memory: 8
+            }
+            },
+            {
+            name: "node2",
+            nodesize: {
+                    cpu: 6,
+                    memory: 8
+                }
+            },
+            {
+            name: "node3",
+            nodesize: {
+                    cpu: 2,
+                    memory: 6
+                }
+            },
+            {
+            name: "node4",
+            nodesize: {
+                    cpu: 4,
+                    memory: 4
+                }
+            },
+            {
+            name: "node5",
+            nodesize: {
+                cpu: 4,
+                memory: 4
+            }
+            }
+        ]
+    };
+}
+
+
+  </script>
+</body>
+</html>
