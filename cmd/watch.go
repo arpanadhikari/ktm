@@ -52,6 +52,10 @@ var runCmd = &cobra.Command{
 		if err := watchEvents(clientset, db, stop); err != nil {
 			return fmt.Errorf("failed to watch events: %w", err)
 		}
+
+		// start web server
+		StartWebServer(make(chan struct{}))
+
 		return nil
 	},
 }
