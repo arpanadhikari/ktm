@@ -1,6 +1,5 @@
 /*
 Copyright © 2022 NAME HERE <EMAIL ADDRESS>
-
 */
 package cmd
 
@@ -54,7 +53,7 @@ var runCmd = &cobra.Command{
 		}
 
 		// start web server
-		StartWebServer(make(chan struct{}))
+		go StartWebServer(make(chan struct{}))
 
 		return nil
 	},

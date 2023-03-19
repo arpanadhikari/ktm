@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"testing"
@@ -31,7 +32,17 @@ func TestStartWebServer(t *testing.T) {
 	defer resp.Body.Close()
 	body, err := ioutil.ReadAll(resp.Body)
 	assert.NoError(t, err, "failed to read response body")
-	assert.Equal(t, "Pod History", string(body), "response body is not Pod History")
+	assert.JSONEq(t, `{"message":"Pod History"}`, string(body), "response body is not as expected")
+
+	// send get request to to / to get index.html
+	resp, err = http.Get("http://localhost:8080/")
+	assert.NoError(t, err, "failed to send get request to /")
+	assert.Equal(t, http.StatusOK, resp.StatusCode, "response status code is not 200")
+	assert.Equal(t, "text/html; charset=utf-8", resp.Header.Get("Content-Type"), "response content type is not text/html; charset=utf-8")
+	// print contents of the response body
+	body, err = ioutil.ReadAll(resp.Body)
+	assert.NoError(t, err, "failed to read response body")
+	fmt.Println(string(body))
 
 	// send stop signal
 	stop <- struct{}{}
