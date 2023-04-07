@@ -45,15 +45,27 @@ var runCmd = &cobra.Command{
 		}
 
 		stop := make(chan struct{})
-		defer close(stop)
 
-		//watch for pod and node events
-		if err := watchEvents(clientset, db, stop); err != nil {
-			return fmt.Errorf("failed to watch events: %w", err)
-		}
+		var wg sync.WaitGroup
+		wg.Add(2)
 
-		// start web server
-		go StartWebServer(make(chan struct{}))
+		// run watchEvents as a goroutine
+		go func() {
+			defer wg.Done()
+			if err := watchEvents(clientset, db, stop); err != nil {
+				fmt.Printf("failed to watch events: %v", err)
+			}
+		}()
+
+		// start web server as a goroutine
+		fmt.Println("Starting web server...")
+		go func() {
+			defer wg.Done()
+			StartWebServer(db, stop)
+		}()
+
+		// wait for both goroutines to complete
+		wg.Wait()
 
 		return nil
 	},
@@ -84,6 +96,7 @@ func initWatch(clientset kubernetes.Interface, db *PodHistoryDB) error {
 	}
 	for _, pod := range pods.Items {
 		// add pod history to database
+		// since it's a first run, add current date as event date on pod's event
 		onAdd(&pod, db)
 	}
 
@@ -164,6 +177,12 @@ func onAdd(obj interface{}, db *PodHistoryDB) {
 		// write podhistory to database
 		if err := db.AddPodHistory(PodHistory{
 			Pod: *pod,
+			Event: v1.Event{
+				Type: "Added",
+				FirstTimestamp: metav1.Time{
+					Time: time.Now(),
+				},
+			},
 		}); err != nil {
 			fmt.Errorf("failed to write pod history to database: %w", err)
 		}
@@ -172,6 +191,12 @@ func onAdd(obj interface{}, db *PodHistoryDB) {
 		fmt.Printf("New Node Added to Store: %s\n", node.GetName())
 		if err := db.AddNodeHistory(NodeHistory{
 			Node: *node,
+			Event: v1.Event{
+				Type: "Added",
+				FirstTimestamp: metav1.Time{
+					Time: time.Now(),
+				},
+			},
 		}); err != nil {
 			fmt.Errorf("failed to write node history to database: %w", err)
 		}
