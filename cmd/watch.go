@@ -18,7 +18,6 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/homedir"
 
-	"github.com/google/go-cmp/cmp"
 	"github.com/spf13/cobra"
 )
 
@@ -39,10 +38,15 @@ var runCmd = &cobra.Command{
 			return fmt.Errorf("failed to create Kubernetes clientset: %w", err)
 		}
 
-		// call initWatch function
-		if err := initWatch(clientset, db); err != nil {
-			return fmt.Errorf("failed to watch pods: %w", err)
-		}
+		// run snapshotCluster as a goroutine every 30 seconds
+		go func() {
+			for {
+				if err := snapshotCluster(clientset, db); err != nil {
+					fmt.Printf("failed to watch pods: %v", err)
+				}
+				time.Sleep(30 * time.Second)
+			}
+		}()
 
 		stop := make(chan struct{})
 
@@ -75,10 +79,10 @@ func init() {
 	rootCmd.AddCommand(runCmd)
 }
 
-func initWatch(clientset kubernetes.Interface, db *PodHistoryDB) error {
+func snapshotCluster(clientset kubernetes.Interface, db *PodHistoryDB) error {
 
 	//print startup message
-	fmt.Println("Starting initWatch...")
+	fmt.Println("Taking cluster pod/node snapshot...")
 
 	pods, err := clientset.CoreV1().Pods(v1.NamespaceAll).List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
@@ -90,15 +94,21 @@ func initWatch(clientset kubernetes.Interface, db *PodHistoryDB) error {
 		return fmt.Errorf("failed to list nodes: %w", err)
 	}
 
-	for _, node := range nodes.Items {
-		// add node history to database
-		onAdd(&node, db)
-	}
-	for _, pod := range pods.Items {
-		// add pod history to database
-		// since it's a first run, add current date as event date on pod's event
-		onAdd(&pod, db)
-	}
+	// TODO: use a proper cluster unique identifier, currently hardcoded for testing
+	// print cluster host
+	// fmt.Println("Cluster host: ", clientset.CoreV1().RESTClient().Get().URL().Host)
+	clusterName := "127.0.0.1:6443"
+
+	db.AddClusterSnapshot(ClusterSnapshot{
+		// get clustername via clientset
+		ClusterName: clusterName,
+		Nodes:       nodes.Items,
+		Pods:        pods.Items,
+		snapshotTimestamp: metav1.Time{
+			Time: time.Now(),
+		},
+	},
+	)
 
 	return nil
 
@@ -172,8 +182,7 @@ func watchEvents(clientset kubernetes.Interface, db *PodHistoryDB, stop chan str
 
 func onAdd(obj interface{}, db *PodHistoryDB) {
 	if pod, ok := obj.(*v1.Pod); ok {
-		fmt.Printf("New Pod Added to Store: %s\n", pod.GetName())
-		pod := obj.(*v1.Pod)
+		fmt.Println("Pod add event added to store ")
 		// write podhistory to database
 		if err := db.AddPodHistory(PodHistory{
 			Pod: *pod,
@@ -188,7 +197,7 @@ func onAdd(obj interface{}, db *PodHistoryDB) {
 		}
 	}
 	if node, ok := obj.(*v1.Node); ok {
-		fmt.Printf("New Node Added to Store: %s\n", node.GetName())
+		fmt.Println("Node add event added to store ")
 		if err := db.AddNodeHistory(NodeHistory{
 			Node: *node,
 			Event: v1.Event{
@@ -205,6 +214,7 @@ func onAdd(obj interface{}, db *PodHistoryDB) {
 
 func onDelete(obj interface{}, db *PodHistoryDB) {
 	if pod, ok := obj.(*v1.Pod); ok {
+		fmt.Println("Pod delete event added to store ")
 		// write podhistory to database
 		if err := db.AddPodHistory(PodHistory{
 			Pod: *pod,
@@ -219,6 +229,7 @@ func onDelete(obj interface{}, db *PodHistoryDB) {
 		}
 	}
 	if node, ok := obj.(*v1.Node); ok {
+		fmt.Println("Node delete event added to store ")
 		if err := db.AddNodeHistory(NodeHistory{
 			Node: *node,
 			Event: v1.Event{
@@ -235,9 +246,9 @@ func onDelete(obj interface{}, db *PodHistoryDB) {
 
 func onUpdate(oldObj, newObj interface{}, db *PodHistoryDB) {
 
-	fmt.Printf("Diff: %v", cmp.Diff(oldObj, newObj))
+	// fmt.Printf("Diff: %v", cmp.Diff(oldObj, newObj))
 	if pod, ok := newObj.(*v1.Pod); ok {
-		fmt.Printf("Pod Updated in Store: %s\n", pod.GetName())
+		fmt.Printf("Pod update event added to store: %s\n", pod.GetName())
 		// write podhistory to database
 		if err := db.AddPodHistory(PodHistory{
 			Pod: *pod,
@@ -252,7 +263,7 @@ func onUpdate(oldObj, newObj interface{}, db *PodHistoryDB) {
 		}
 	}
 	if node, ok := newObj.(*v1.Node); ok {
-		fmt.Printf("Node Updated in Store: %s\n", node.GetName())
+		fmt.Printf("Node update event added to store: %s\n", node.GetName())
 		if err := db.AddNodeHistory(NodeHistory{
 			Node: *node,
 			Event: v1.Event{

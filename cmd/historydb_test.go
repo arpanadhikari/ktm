@@ -40,7 +40,7 @@ func TestGetPodHistory(t *testing.T) {
 		}
 
 		// Get the pod history
-		podHistory, err := phdb.GetPodHistory(podName)
+		podHistory, err := phdb.GetPodHistory(podName, "30s")
 		assert.NoError(t, err)
 
 		// assert number of pods

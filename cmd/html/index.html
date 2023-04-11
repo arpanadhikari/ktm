@@ -17,9 +17,35 @@
       padding: 10px;
       box-sizing: border-box;
     }
+
+    .node-enter {
+      transition: all 0.5s ease;
+      background-color: #0f0;
+    }
+
+    .node-update {
+      transition: all 0.5s ease;
+      background-color: #ff0;
+    }
+
+    .node-exit {
+      transition: all 0.5s ease;
+      background-color: #f00;
+      opacity: 0;
+    }
+
+
   </style>
+
 </head>
 <body>
+  <h1>Live Cluster View</h1>
+
+  <label>
+    <input type="checkbox" id="liveUpdate" checked>
+    Live Update
+  </label>
+  
   <div id="visualization"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>

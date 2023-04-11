@@ -47,18 +47,18 @@ func TestInitWatch(t *testing.T) {
 			},
 		)
 
-		err := initWatch(clientset, db)
+		err := snapshotCluster(clientset, db)
 		if err != nil {
 			t.Errorf("failed to execute initWatch: %v", err)
 		}
 
-		podHistory, err := db.GetPodHistory(podName)
+		podHistory, err := db.GetPodHistory(podName, "30s")
 		if err != nil {
 			t.Errorf("failed to get pod from database: %v", err)
 		}
 		assert.Equal(t, podHistory[0].Pod.ObjectMeta.Name, podName, "pod name is not the same as the one we created")
 
-		nodeHistory, err := db.GetNodeHistory(nodeName)
+		nodeHistory, err := db.GetNodeHistory(nodeName, "30s")
 		if err != nil {
 			t.Errorf("failed to get node from database: %v", err)
 		}
@@ -121,11 +121,11 @@ func TestWatchEvents(t *testing.T) {
 		_, err = clientset.CoreV1().Nodes().Create(context.Background(), node, metav1.CreateOptions{})
 		assert.NoError(t, err)
 		time.Sleep(1 * time.Second)
-		podHistory, err := db.GetPodHistory(pod.Name)
+		podHistory, err := db.GetPodHistory(pod.Name, "30s")
 		assert.NoError(t, err)
 		assert.Equal(t, pod.Name, podHistory[0].Pod.Name)
 		assert.Equal(t, 1, len(podHistory))
-		nodeHistory, err := db.GetNodeHistory(node.Name)
+		nodeHistory, err := db.GetNodeHistory(node.Name, "30s")
 		assert.NoError(t, err)
 		assert.Equal(t, node.Name, nodeHistory[0].Node.Name)
 		assert.Equal(t, 1, len(nodeHistory))
@@ -143,7 +143,7 @@ func TestWatchEvents(t *testing.T) {
 		_, err = clientset.CoreV1().Nodes().Update(context.Background(), node, metav1.UpdateOptions{})
 		assert.NoError(t, err)
 		time.Sleep(1 * time.Second)
-		podHistory, err = db.GetPodHistory(pod.Name)
+		podHistory, err = db.GetPodHistory(pod.Name, "30s")
 
 		fmt.Printf("podHistory: %v", podHistory)
 
@@ -151,7 +151,7 @@ func TestWatchEvents(t *testing.T) {
 		assert.Equal(t, 2, len(podHistory))
 		assert.Equal(t, pod.Name, podHistory[1].Pod.Name)
 		assert.Equal(t, pod.Spec.NodeName, podHistory[1].Pod.Spec.NodeName)
-		nodeHistory, err = db.GetNodeHistory(node.Name)
+		nodeHistory, err = db.GetNodeHistory(node.Name, "30s")
 		assert.Equal(t, 2, len(nodeHistory))
 		assert.NoError(t, err)
 		assert.Equal(t, node.Name, nodeHistory[1].Node.Name)
@@ -162,12 +162,12 @@ func TestWatchEvents(t *testing.T) {
 		err = clientset.CoreV1().Nodes().Delete(context.Background(), node.Name, metav1.DeleteOptions{})
 		assert.NoError(t, err)
 		time.Sleep(1 * time.Second)
-		podHistory, err = db.GetPodHistory(pod.Name)
+		podHistory, err = db.GetPodHistory(pod.Name, "30s")
 		assert.NoError(t, err)
 		assert.Equal(t, 3, len(podHistory))
 		assert.Equal(t, pod.Name, podHistory[2].Pod.Name)
 		assert.Equal(t, podHistory[2].Event.Type, "Deleted")
-		nodeHistory, err = db.GetNodeHistory(node.Name)
+		nodeHistory, err = db.GetNodeHistory(node.Name, "30s")
 		assert.NoError(t, err)
 		assert.Equal(t, 3, len(nodeHistory))
 		assert.Equal(t, node.Name, nodeHistory[2].Node.Name)

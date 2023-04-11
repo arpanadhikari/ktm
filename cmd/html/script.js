@@ -1,12 +1,15 @@
 document.addEventListener("DOMContentLoaded", () => {
   updateDashboard();
-  setInterval(updateDashboard, 2000);
+  // setInterval(updateDashboard, 2000);
 });
 
 async function mapPodsToNodes() {
   const clusterSnapshot = await getClusterSnapshot("2h");
   const nodeData = clusterSnapshot.data[1];
   const podData = clusterSnapshot.data[0];
+
+  console.log(nodeData);
+  console.log(podData);
 
   const groupedPods = d3.group(podData.children, d => d.nodename);
   nodeData.children.forEach(node => {
@@ -42,69 +45,81 @@ async function getClusterSnapshot(relativeTime) {
 }
 
 async function updateDashboard() {
-  d3.select("#visualization").html("");
+  const nodeData = await mapPodsToNodes();
 
-  mapPodsToNodes().then(nodeData => {
-    const svg = d3
-      .select("#visualization")
-      .append("svg")
-      .attr("width", window.innerWidth)
-      .attr("height", window.innerHeight);
+  const svg = d3
+    .select("#visualization")
+    .selectAll("svg")
+    .data([nodeData])
+    .join("svg")
+    .attr("width", window.innerWidth)
+    .attr("height", window.innerHeight);
 
-    const root = d3
-      .hierarchy(nodeData)
-      .sum(d => computeSize(d))
-      .sort();
+  const root = d3
+    .hierarchy(nodeData)
+    .sum(d => computeSize(d))
+    .sort();
 
-    const treemap = d3
-      .treemap()
-      .size([800, 800])
-      .paddingInner(10)
-      .paddingTop(5)
-      .paddingRight(2)
-      .paddingBottom(2)
-      .paddingLeft(2)
-      .round(2)
-      .tile(d3.treemapSquarify.ratio(1))(root);
+  const treemap = d3
+    .treemap()
+    .size([800, 800])
+    .paddingInner(10)
+    .paddingTop(5)
+    .paddingRight(2)
+    .paddingBottom(2)
+    .paddingLeft(2)
+    .round(2)
+    .tile(d3.treemapSquarify.ratio(1))(root);
 
-    const g = svg
-      .append("g")
-      .attr("transform", `translate(${treemap.leaves()[0].x0},${treemap.leaves()[0].y0})`);
+  const g = svg
+    .selectAll("g")
+    .data([treemap])
+    .join("g")
+    .attr("transform", `translate(${treemap.leaves()[0].x0},${treemap.leaves()[0].y0})`);
 
-    const nodes = g
-      .selectAll("a")
-      .data(treemap.descendants())
-      .enter()
-      .append("a")
-      .attr("href", d => {
-        return d.height === 1
-          ? `nodehistory/${d.data.name}?relativeTime=10h`
-          : `podhistory/${d.data.name}?relativeTime=10h`;
-      });
-
-    nodes
-      .append("rect")
-      .attr("x", d => d.x0)
-      .attr("y", d => d.y0)
-      .attr("width", d => d.x1 - d.x0)
-      .attr("height", d => d.y1 - d.y0)
-      .style("fill", d => {
-        if (d.depth === 0) {
-          return "lightblue"
-      }
-        return d.height === 1 ? "#03385c" : "#3568a3";
-      });
-
-    nodes
-      .append("title")
-      .text(d => d.data.name);
-    
-    nodes
-      .append("text")
-      .attr("x", d => d.x0 + 10)
-      .attr("y", d => (d.height === 1 ? d.y0 + 20 : d.y0 + 40))
-      .attr("font-size", "14px")
-      .attr("fill", "white")
-      // .text(d => d.data.name);
+  const nodes = g
+    .selectAll("a")
+    .data(treemap.descendants())
+    // .join("a")
+    .join(
+      enter => enter.append("a").classed("node-enter", true),
+      update => update.classed("node-update", true),
+      exit => exit.classed("node-exit", true).remove()
+    )
+    .attr("href", d => {
+      return d.height === 1
+        ? `nodehistory/${d.data.name}?relativeTime=10h`
+        : `podhistory/${d.data.name}?relativeTime=10h`;
     });
-  }    
+
+  nodes
+    .selectAll("rect")
+    .data(d => [d])
+    // .join("rect")
+    .join(
+      enter => enter.append("rect").classed("node-enter", true),
+      update => update.classed("node-update", true),
+      exit => exit.classed("node-exit", true).remove()
+    )
+    .attr("x", d => d.x0)
+    .attr("y", d => d.y0)
+    .attr("width", d => d.x1 - d.x0)
+    .attr("height", d => d.y1 - d.y0)
+    .style("fill", d => (d.height === 0 ? "#788b9d": (d.height === 1 ? "#03385c" : "#3568a3")));
+
+  nodes
+    .selectAll("title")
+    .data(d => [d])
+    .join("title")
+    .text(d => d.data.name);
+
+  nodes
+    .selectAll("text")
+    .data(d => [d])
+    .join("text")
+    .attr("x", d => d.x0 + 10)
+    .attr("y", d => (d.height === 1 ? d.y0 + 20 : d.y0 + 40))
+    .attr("font-size", "14px")
+    .attr("fill", "white");
+    // .text(d => d.data.name);
+}

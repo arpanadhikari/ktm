@@ -11,39 +11,46 @@ import (
 )
 
 // TestStartWebServer starts the web server,
+// currently only runs a dummy test to check if the server starts
 func TestStartWebServer(t *testing.T) {
-	// Start web server
-	stop := make(chan struct{})
 
-	// start webserver in a go routine
-	go func() {
-		StartWebServer(stop)
-	}()
+	withTestPodHistoryDB(t, func(phdb *PodHistoryDB, t *testing.T) {
 
-	// wait for server to start
-	time.Sleep(1 * time.Second)
+		// Start web server
+		stop := make(chan struct{})
 
-	// send get request to /podhistory using http client
-	resp, err := http.Get("http://localhost:8080/podhistory")
-	assert.NoError(t, err, "failed to send get request to /podhistory")
-	assert.Equal(t, http.StatusOK, resp.StatusCode, "response status code is not 200")
-	assert.Equal(t, "application/json", resp.Header.Get("Content-Type"), "response content type is not application/json")
+		// start webserver in a go routine
+		go func() {
+			StartWebServer(phdb, stop)
+		}()
 
-	defer resp.Body.Close()
-	body, err := ioutil.ReadAll(resp.Body)
-	assert.NoError(t, err, "failed to read response body")
-	assert.JSONEq(t, `{"message":"Pod History"}`, string(body), "response body is not as expected")
+		// wait for server to start
+		time.Sleep(1 * time.Second)
 
-	// send get request to to / to get index.html
-	resp, err = http.Get("http://localhost:8080/")
-	assert.NoError(t, err, "failed to send get request to /")
-	assert.Equal(t, http.StatusOK, resp.StatusCode, "response status code is not 200")
-	assert.Equal(t, "text/html; charset=utf-8", resp.Header.Get("Content-Type"), "response content type is not text/html; charset=utf-8")
-	// print contents of the response body
-	body, err = ioutil.ReadAll(resp.Body)
-	assert.NoError(t, err, "failed to read response body")
-	fmt.Println(string(body))
+		// send get request to /podhistory using http client
+		resp, err := http.Get("http://localhost:8080/podhistory")
+		assert.NoError(t, err, "failed to send get request to /podhistory")
+		assert.Equal(t, http.StatusOK, resp.StatusCode, "response status code is not 200")
+		assert.Equal(t, "application/json", resp.Header.Get("Content-Type"), "response content type is not application/json")
 
-	// send stop signal
-	stop <- struct{}{}
+		defer resp.Body.Close()
+		body, err := ioutil.ReadAll(resp.Body)
+		assert.NoError(t, err, "failed to read response body")
+		assert.JSONEq(t, `{"children":[],"name":"pods"}`, string(body), "response body is not as expected")
+
+		// send get request to to / to get index.html
+		resp, err = http.Get("http://localhost:8080/podhistory")
+		assert.NoError(t, err, "failed to send get request to /")
+		assert.Equal(t, http.StatusOK, resp.StatusCode, "response status code is not 200")
+		assert.Equal(t, "application/json", resp.Header.Get("Content-Type"), "response content type is not text/html; charset=utf-8")
+		// print contents of the response body
+		body, err = ioutil.ReadAll(resp.Body)
+		assert.NoError(t, err, "failed to read response body")
+		fmt.Println(string(body))
+
+		// send stop signal
+		stop <- struct{}{}
+
+	})
+
 }
