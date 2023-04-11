@@ -20,4 +20,11 @@ jobs:
       - name: Build
         run: go build -o ktm
       - name: Run unit tests
-        run: go test ./cmd/
+        run: go test -v -coverprofile=ktm-coverage.out ./...
+      - name: convert coverage to html
+        run: go tool cover -html=ktm-coverage.out -o ktm-coverage.html
+      - name: publish coverage html as artifact with pr number
+        uses: actions/upload-artifact@v3
+        with:
+          name: ktm-coverage-${{ github.event.pull_request.number }}
+          path: ktm-coverage.html

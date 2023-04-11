@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Node Visualization</title>
+  <style>
+    #visualization {
+      width: 100%;
+      height: 500px;
+    }
+
+    .node {
+      width: 150px;
+      height: 100px;
+      background-color: #ccc;
+      border-radius: 10px;
+      padding: 10px;
+      box-sizing: border-box;
+    }
+
+    .node-enter {
+      transition: all 0.5s ease;
+      background-color: #0f0;
+    }
+
+    .node-update {
+      transition: all 0.5s ease;
+      background-color: #ff0;
+    }
+
+    .node-exit {
+      transition: all 0.5s ease;
+      background-color: #f00;
+      opacity: 0;
+    }
+
+
+  </style>
+
+</head>
+<body>
+  <h1>Live Cluster View</h1>
+
+  <label>
+    <input type="checkbox" id="liveUpdate" checked>
+    Live Update
+  </label>
+  
+  <div id="visualization"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+
+  <script src="script.js"></script>
+</body>
+</html>

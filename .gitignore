@@ -16,3 +16,9 @@
 
 #ktm go binary
 ktm
+
+ktm_podhistorydb.db
+
+#ktm test coverage
+*coverage.out
+*coverage.html

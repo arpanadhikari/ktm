@@ -1,6 +1,5 @@
 /*
 Copyright © 2022 NAME HERE <EMAIL ADDRESS>
-
 */
 package cmd
 
@@ -23,8 +22,8 @@ import (
 )
 
 var runCmd = &cobra.Command{
-	Use:   "podwatch",
-	Short: "Watches Kubernetes events",
+	Use:   "watch",
+	Short: "Watches Kubernetes events for pods and nodes",
 	RunE: func(cmd *cobra.Command, args []string) error {
 
 		//Load Kubernetes configuration from file or environment variable
@@ -39,18 +38,39 @@ var runCmd = &cobra.Command{
 			return fmt.Errorf("failed to create Kubernetes clientset: %w", err)
 		}
 
-		// call podWatch function
-		if err := podWatch(clientset, db); err != nil {
-			return fmt.Errorf("failed to watch pods: %w", err)
-		}
+		// run snapshotCluster as a goroutine every 30 seconds
+		go func() {
+			for {
+				if err := snapshotCluster(clientset, db); err != nil {
+					fmt.Printf("failed to watch pods: %v", err)
+				}
+				time.Sleep(30 * time.Second)
+			}
+		}()
 
 		stop := make(chan struct{})
-		defer close(stop)
 
-		//watch for pod and node events
-		if err := watchEvents(clientset, db, stop); err != nil {
-			return fmt.Errorf("failed to watch events: %w", err)
-		}
+		var wg sync.WaitGroup
+		wg.Add(2)
+
+		// run watchEvents as a goroutine
+		go func() {
+			defer wg.Done()
+			if err := watchEvents(clientset, db, stop); err != nil {
+				fmt.Printf("failed to watch events: %v", err)
+			}
+		}()
+
+		// start web server as a goroutine
+		fmt.Println("Starting web server...")
+		go func() {
+			defer wg.Done()
+			StartWebServer(db, stop)
+		}()
+
+		// wait for both goroutines to complete
+		wg.Wait()
+
 		return nil
 	},
 }
@@ -59,10 +79,10 @@ func init() {
 	rootCmd.AddCommand(runCmd)
 }
 
-func podWatch(clientset kubernetes.Interface, db *PodHistoryDB) error {
+func snapshotCluster(clientset kubernetes.Interface, db *PodHistoryDB) error {
 
 	//print startup message
-	fmt.Println("Starting podwatch...")
+	fmt.Println("Taking cluster pod/node snapshot...")
 
 	pods, err := clientset.CoreV1().Pods(v1.NamespaceAll).List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
@@ -74,20 +94,26 @@ func podWatch(clientset kubernetes.Interface, db *PodHistoryDB) error {
 		return fmt.Errorf("failed to list nodes: %w", err)
 	}
 
-	for _, node := range nodes.Items {
-		// add node history to database
-		onAdd(&node, db)
-	}
-	for _, pod := range pods.Items {
-		// add pod history to database
-		onAdd(&pod, db)
-	}
+	// TODO: use a proper cluster unique identifier, currently hardcoded for testing
+	// print cluster host
+	// fmt.Println("Cluster host: ", clientset.CoreV1().RESTClient().Get().URL().Host)
+	clusterName := "127.0.0.1:6443"
+
+	db.AddClusterSnapshot(ClusterSnapshot{
+		// get clustername via clientset
+		ClusterName: clusterName,
+		Nodes:       nodes.Items,
+		Pods:        pods.Items,
+		snapshotTimestamp: metav1.Time{
+			Time: time.Now(),
+		},
+	},
+	)
 
 	return nil
 
 }
 
-// TODO: refactor the function to enable unit testing
 // watchEvents watches for pod and node events and writes them to the database
 func watchEvents(clientset kubernetes.Interface, db *PodHistoryDB, stop chan struct{}) error {
 
@@ -156,19 +182,30 @@ func watchEvents(clientset kubernetes.Interface, db *PodHistoryDB, stop chan str
 
 func onAdd(obj interface{}, db *PodHistoryDB) {
 	if pod, ok := obj.(*v1.Pod); ok {
-		fmt.Printf("New Pod Added to Store: %s\n", pod.GetName())
-		pod := obj.(*v1.Pod)
+		fmt.Println("Pod add event added to store ")
 		// write podhistory to database
 		if err := db.AddPodHistory(PodHistory{
 			Pod: *pod,
+			Event: v1.Event{
+				Type: "Added",
+				FirstTimestamp: metav1.Time{
+					Time: time.Now(),
+				},
+			},
 		}); err != nil {
 			fmt.Errorf("failed to write pod history to database: %w", err)
 		}
 	}
 	if node, ok := obj.(*v1.Node); ok {
-		fmt.Printf("New Node Added to Store: %s\n", node.GetName())
+		fmt.Println("Node add event added to store ")
 		if err := db.AddNodeHistory(NodeHistory{
 			Node: *node,
+			Event: v1.Event{
+				Type: "Added",
+				FirstTimestamp: metav1.Time{
+					Time: time.Now(),
+				},
+			},
 		}); err != nil {
 			fmt.Errorf("failed to write node history to database: %w", err)
 		}
@@ -177,26 +214,66 @@ func onAdd(obj interface{}, db *PodHistoryDB) {
 
 func onDelete(obj interface{}, db *PodHistoryDB) {
 	if pod, ok := obj.(*v1.Pod); ok {
-		fmt.Printf("Pod Deleted from Store: %s\n", pod.GetName())
+		fmt.Println("Pod delete event added to store ")
+		// write podhistory to database
+		if err := db.AddPodHistory(PodHistory{
+			Pod: *pod,
+			Event: v1.Event{
+				Type: "Deleted",
+				FirstTimestamp: metav1.Time{
+					Time: time.Now(),
+				},
+			},
+		}); err != nil {
+			fmt.Errorf("failed to write pod history to database: %w", err)
+		}
 	}
 	if node, ok := obj.(*v1.Node); ok {
-		fmt.Printf("Node Deleted from Store: %s\n", node.GetName())
+		fmt.Println("Node delete event added to store ")
+		if err := db.AddNodeHistory(NodeHistory{
+			Node: *node,
+			Event: v1.Event{
+				Type: "Deleted",
+				FirstTimestamp: metav1.Time{
+					Time: time.Now(),
+				},
+			},
+		}); err != nil {
+			fmt.Errorf("failed to write node history to database: %w", err)
+		}
 	}
 }
 
 func onUpdate(oldObj, newObj interface{}, db *PodHistoryDB) {
+
+	// fmt.Printf("Diff: %v", cmp.Diff(oldObj, newObj))
 	if pod, ok := newObj.(*v1.Pod); ok {
-		fmt.Printf("Pod Updated in Store: %s\n", pod.GetName())
+		fmt.Printf("Pod update event added to store: %s\n", pod.GetName())
+		// write podhistory to database
+		if err := db.AddPodHistory(PodHistory{
+			Pod: *pod,
+			Event: v1.Event{
+				Type: "Updated",
+				FirstTimestamp: metav1.Time{
+					Time: time.Now(),
+				},
+			},
+		}); err != nil {
+			fmt.Errorf("failed to write pod history to database: %w", err)
+		}
 	}
 	if node, ok := newObj.(*v1.Node); ok {
-		fmt.Printf("Node Updated in Store: %s\n", node.GetName())
-	}
-
-	// print the old object name
-	if oldObj, ok := oldObj.(*v1.Node); ok {
-		fmt.Printf("oldObj: %s", oldObj.GetName())
-	}
-	if oldObj, ok := oldObj.(*v1.Pod); ok {
-		fmt.Printf("oldObj: %s", oldObj.GetName())
+		fmt.Printf("Node update event added to store: %s\n", node.GetName())
+		if err := db.AddNodeHistory(NodeHistory{
+			Node: *node,
+			Event: v1.Event{
+				Type: "Updated",
+				FirstTimestamp: metav1.Time{
+					Time: time.Now(),
+				},
+			},
+		}); err != nil {
+			fmt.Errorf("failed to write node history to database: %w", err)
+		}
 	}
 }
