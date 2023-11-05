@@ -3,7 +3,8 @@ module ktm
 go 1.17
 
 require (
-	github.com/spf13/cobra v1.4.0
+	github.com/spf13/cobra v1.8.0
+	github.com/stretchr/testify v1.8.2
 	go.etcd.io/bbolt v1.3.7
 	k8s.io/api v0.24.1
 	k8s.io/apimachinery v0.24.1
@@ -28,7 +29,7 @@ require (
 	github.com/google/gofuzz v1.1.0 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
 	github.com/imdario/mergo v0.3.5 // indirect
-	github.com/inconshreveable/mousetrap v1.0.0 // indirect
+	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/magiconair/properties v1.8.6 // indirect
@@ -46,7 +47,6 @@ require (
 	github.com/spf13/jwalterweatherman v1.1.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/spf13/viper v1.12.0 // indirect
-	github.com/stretchr/testify v1.8.2 // indirect
 	github.com/subosito/gotenv v1.3.0 // indirect
 	golang.org/x/net v0.0.0-20220520000938-2e3eb7b945c2 // indirect
 	golang.org/x/oauth2 v0.0.0-20220411215720-9780585627b5 // indirect
